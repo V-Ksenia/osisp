@@ -1,12 +1,10 @@
 ﻿#include <iostream>
-#include <string>
-#include <map>
-#include <winsock2.h>
-#include <ws2tcpip.h>
 #include <sstream>
 #include <algorithm>
 #include <ctime>
 #include <cctype>
+#include <map>
+#include <Windows.h>
 
 #pragma comment(lib, "ws2_32.lib")
 
@@ -49,54 +47,31 @@ std::string handle_command(const std::string& command) {
 }
 
 int main() {
-    WSADATA wsaData;
+	HINSTANCE load;
+	load = LoadLibrary(L"SocketDLLib.dll");
 
-    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
-        std::cerr << "Ошибка инициализации Winsock.\n";
-        return 1;
-    }
-
-
-    SOCKET serverSocket = socket(AF_INET, SOCK_STREAM, 0);
-    if (serverSocket == INVALID_SOCKET) {
-        std::cerr << "Ошибка создания сокета.\n";
-        WSACleanup();
-        return 1;
-    }
-
-    sockaddr_in serverAddr{};
-    serverAddr.sin_family = AF_INET;
-    serverAddr.sin_port = htons(8080);
-    inet_pton(AF_INET, "127.0.0.1", &serverAddr.sin_addr);
+	typedef bool (*init_winsock) ();
+	init_winsock Init_Winsock;
+	Init_Winsock = (init_winsock)GetProcAddress(load, "init_winsock");
 
 
-    if (bind(serverSocket, (sockaddr*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR) {
-        std::cerr << "Ошибка привязки сокет.\n";
-        closesocket(serverSocket);
-        WSACleanup();
-        return 1;
-    }
+    typedef SOCKET (*create_server_socket) (int);
+    create_server_socket Create_Server_Socket;
+    Create_Server_Socket = (create_server_socket)GetProcAddress(load, "create_server_socket");
 
 
-    if (listen(serverSocket, SOMAXCONN) == SOCKET_ERROR) {
-        std::cerr << "Ошибка начала прослушивания.\n";
-        closesocket(serverSocket);
-        WSACleanup();
-        return 1;
-    }
+    typedef SOCKET(*accept_client) (SOCKET);
+    accept_client Accept_Client;
+    Accept_Client = (accept_client)GetProcAddress(load, "accept_client");
+
+
+    Init_Winsock();
+
+    SOCKET serverSocket = Create_Server_Socket(8080);
 
     std::cout << "Сервер запущен. Ожидание подключения...\n";
 
-
-    sockaddr_in clientAddr{};
-    int clientAddrSize = sizeof(clientAddr);
-    SOCKET clientSocket = accept(serverSocket, (sockaddr*)&clientAddr, &clientAddrSize);
-    if (clientSocket == INVALID_SOCKET) {
-        std::cerr << "Ошибка. Не удалось принять соединение.\n";
-        closesocket(serverSocket);
-        WSACleanup();
-        return 1;
-    }
+    SOCKET clientSocket = Accept_Client(serverSocket);
 
     std::cout << "Клиент подключен.\n";
 
@@ -128,9 +103,10 @@ int main() {
 
         send(clientSocket, result.c_str(), result.size(), 0);
     }
-
     closesocket(clientSocket);
     closesocket(serverSocket);
     WSACleanup();
+	FreeLibrary(load);
+
     return 0;
 }

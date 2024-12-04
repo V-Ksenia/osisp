@@ -1,4 +1,4 @@
-#include <iostream>
+﻿#include <iostream>
 #include <string>
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -7,39 +7,26 @@
 
 const int BUFFER_SIZE = 1024;
 
-int main() {
-    WSADATA wsaData;
+int main()
+{
+    HINSTANCE load;
+    load = LoadLibrary(L"SocketDLLib.dll");
+
+    typedef bool (*init_winsock) ();
+    init_winsock Init_Winsock;
+    Init_Winsock = (init_winsock)GetProcAddress(load, "init_winsock");
 
 
-    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
-        std::cerr << "Ошибка: инициализация Winsock не удалась.\n";
-        return 1;
-    }
+    typedef SOCKET(*create_client_socket) (int);
+    create_client_socket Create_Client_Socket;
+    Create_Client_Socket = (create_client_socket)GetProcAddress(load, "create_client_socket");
 
 
-    SOCKET clientSocket = socket(AF_INET, SOCK_STREAM, 0);
-    if (clientSocket == INVALID_SOCKET) {
-        std::cerr << "Ошибка: не удалось создать сокет.\n";
-        WSACleanup();
-        return 1;
-    }
-
-    sockaddr_in serverAddr{};
-    serverAddr.sin_family = AF_INET;
-    serverAddr.sin_port = htons(8080);
-    inet_pton(AF_INET, "127.0.0.1", &serverAddr.sin_addr);
-
-
-    if (connect(clientSocket, (sockaddr*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR) {
-        std::cerr << "Ошибка. Не удалось подключиться к серверу :(.\n";
-        closesocket(clientSocket);
-        WSACleanup();
-        return 1;
-    }
+    Init_Winsock();
+    SOCKET clientSocket = Create_Client_Socket(8080);
 
     std::cout << "Подключено к серверу.\n";
 
-    // Ввод и отправка команд
     char buffer[BUFFER_SIZE];
     while (true) {
         std::string command;
@@ -57,5 +44,6 @@ int main() {
 
     closesocket(clientSocket);
     WSACleanup();
+    FreeLibrary(load);
     return 0;
 }
